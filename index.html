@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hamming SEC-DED Kod Simülatörü</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            line-height: 1.6;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        
+        .step {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        .step h3 {
+            margin-top: 0;
+            color: #555;
+        }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            border: 2px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        .result {
+            background-color: #f9f9f9;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .bit-display {
+            font-size: 18px;
+            letter-spacing: 2px;
+            word-break: break-all;
+        }
+        
+        .error {
+            color: #d32f2f;
+            font-weight: bold;
+        }
+        
+        .success {
+            color: #388e3c;
+            font-weight: bold;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .positions {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .parity-bit {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        
+        .info {
+            background-color: #e3f2fd;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Hamming SEC-DED Kod Simülatörü</h1>
+        
+        <!-- Adım 1: Veri girişi -->
+        <div class="step" id="step1">
+            <h3>Adım 1: Verilerinizi girin</h3>
+            <div class="info">
+                8, 16 veya 32 bit uzunluğunda ikili veri girin.<br>
+            </div>
+            <input type="text" id="inputData" placeholder="İkili veri girin" maxlength="32">
+            <button onclick="encodeData()">Kodla</button>
+        </div>
+        
+        <!-- Adım 2: Kodlanmış verileri göster -->
+        <div class="step hidden" id="step2">
+            <h3>Adım 2: Kodlanmış veriler</h3>
+            <div class="result">
+                <div><strong>Orijinal veriler:</strong> <span id="originalData" class="bit-display"></span></div>
+                <div><strong>Kontrol bitleri:</strong> <span id="parityBits"></span></div>
+                <div><strong>Tam kod:</strong></div>
+                <div id="encodedData" class="bit-display"></div>
+            </div>
+        </div>
+        
+        <!-- Adım 3: Hatalı veri girişi -->
+        <div class="step hidden" id="step3">
+            <h3>Adım 3: Hatalı veri girin</h3>
+            <input type="text" id="errorData" placeholder="Hatalı veri girin">
+            <button onclick="checkError()">Hatayı kontrol et</button>
+        </div>
+        
+        <!-- Adım 4: Kontrol sonucu -->
+        <div class="step hidden" id="step4">
+            <h3>Adım 4: Kontrol sonucu</h3>
+            <div class="result" id="errorResult"></div>
+            <button onclick="reset()">Yeniden başla</button>
+        </div>
+    </div>
+
+    <script>
+        let originalBits = '';
+        let encodedBits = '';
+        
+        function validateBinaryInput(input) {
+            return /^[01]+$/.test(input);
+        }
+        
+        function validateDataLength(input) {
+            const validLengths = [8, 16, 32];
+            return validLengths.includes(input.length);
+        }
+        
+        function calculateParityBits(data) {
+            const n = data.length;
+            // Kontrol bit sayısını belirle
+            let m = 0;
+            while ((1 << m) < (n + m + 1)) {
+                m++;
+            }
+            
+            const totalBits = n + m + 1; // +1 PP (genel parite biti) için
+            
+            // Bitleri yerleştirmek için dizi oluştur (1'den başlayarak indeksleme, sağdan sola)
+            let bits = new Array(totalBits + 1);
+            
+            // Veri bitlerini yerleştir (sağdan sola)
+            // data[0] - giriş verilerinin en sol biti
+            // Ancak pozisyonları sağdan sola sayıyoruz
+            let dataIndex = 0;
+            for (let pos = 1; pos <= totalBits - 1; pos++) { // -1 çünkü son pozisyon PP için
+                if (!isPowerOfTwo(pos)) {
+                    // Veri bitlerini ters sırada al (sağdan sola)
+                    bits[pos] = parseInt(data[n - 1 - dataIndex]);
+                    dataIndex++;
+                }
+            }
+            
+            // Kontrol bitlerini hesapla
+            for (let i = 1; i < totalBits; i *= 2) {
+                let parity = 0;
+                for (let j = 1; j < totalBits; j++) { // PP'yi P-bit hesaplamalarına dahil etme
+                    if ((j & i) !== 0 && bits[j] !== undefined) {
+                        parity ^= bits[j];
+                    }
+                }
+                bits[i] = parity;
+            }
+            
+            // Genel parite bitini hesapla (PP) - kendisi hariç tüm bitleri içerir
+            let totalParity = 0;
+            for (let i = 1; i < totalBits; i++) {
+                if (bits[i] !== undefined) {
+                    totalParity ^= bits[i];
+                }
+            }
+            bits[totalBits] = totalParity; // PP son pozisyonda
+            
+            return bits;
+        }
+        
+        function isPowerOfTwo(n) {
+            return n > 0 && (n & (n - 1)) === 0;
+        }
+        
+        function encodeData() {
+            const input = document.getElementById('inputData').value.trim();
+            
+            if (!input) {
+                alert('Lütfen veri girin');
+                return;
+            }
+            
+            if (!validateBinaryInput(input)) {
+                alert('Lütfen sadece 0 ve 1 kullanın');
+                return;
+            }
+            
+            if (!validateDataLength(input)) {
+                alert('Veri uzunluğu 8, 16 veya 32 bit olmalıdır. Girilen uzunluk: ' + input.length);
+                return;
+            }
+            
+            originalBits = input;
+            const encoded = calculateParityBits(input);
+            
+            // Kontrol bitlerini hesapla ve göster
+            let result = '';
+            for (let i = encoded.length - 1; i >= 1; i--) {
+                if (isPowerOfTwo(i) || i === encoded.length - 1) { // kontrol bitleri ve PP
+                    result += `<span class="parity-bit">${encoded[i]}</span>`;
+                } else {
+                    result += encoded[i];
+                }
+            }
+            encodedBits = '';
+            for (let i = encoded.length - 1; i >= 1; i--) {
+                encodedBits += encoded[i];
+            }
+            
+            // Sonucu göster
+            document.getElementById('originalData').textContent = input;
+            document.getElementById('encodedData').innerHTML = result;
+            
+            // Veri yerleşimini göster
+            // Kaldırıldı - gerekli değil
+            
+            // Pozisyonları göster (sağdan sola)
+            // Kaldırıldı - gerekli değil
+            
+            // Kontrol bitlerini göster
+            let parityInfo = '';
+            for (let i = 1; i < encoded.length; i++) {
+                if (isPowerOfTwo(i)) {
+                    parityInfo += `P${i}=${encoded[i]} `;
+                }
+            }
+            parityInfo += `PP=${encoded[encoded.length - 1]}`;
+            document.getElementById('parityBits').textContent = parityInfo;
+            
+            // Hata alanını hazırla
+            document.getElementById('errorData').value = encodedBits;
+            
+            // Sonraki adımları göster
+            document.getElementById('step2').classList.remove('hidden');
+            document.getElementById('step3').classList.remove('hidden');
+        }
+        
+        function checkError() {
+            const errorInput = document.getElementById('errorData').value.trim();
+            
+            if (!errorInput) {
+                alert('Lütfen hatalı veri girin');
+                return;
+            }
+            
+            if (!validateBinaryInput(errorInput)) {
+                alert('Lütfen sadece 0 ve 1 kullanın');
+                return;
+            }
+            
+            if (errorInput.length !== encodedBits.length) {
+                alert('Uzunluk kodlanmış verilerle eşleşmelidir');
+                return;
+            }
+            
+            const result = detectError(encodedBits, errorInput);
+            displayErrorResult(result);
+            
+            document.getElementById('step4').classList.remove('hidden');
+        }
+        
+        function detectError(original, received) {
+            const n = received.length;
+            let syndrome = 0;
+            
+            // Stringi pozisyon dizisine geri dönüştür (sağdan sola)
+            let receivedBits = new Array(n + 1);
+            for (let i = 0; i < n; i++) {
+                receivedBits[n - i] = parseInt(received[i]);
+            }
+            
+            // Sendromu hesapla
+            for (let i = 1; i < n; i *= 2) {
+                let parity = 0;
+                for (let j = 1; j < n; j++) { // PP'yi sendrom hesaplamasına dahil etme
+                    if ((j & i) !== 0 && receivedBits[j] !== undefined) {
+                        parity ^= receivedBits[j];
+                    }
+                }
+                if (parity === 1) {
+                    syndrome += i;
+                }
+            }
+            
+            // Genel pariteyi kontrol et
+            let totalParity = 0;
+            for (let i = 1; i <= n; i++) {
+                if (receivedBits[i] !== undefined) {
+                    totalParity ^= receivedBits[i];
+                }
+            }
+            
+            // Sonucu analiz et
+            if (syndrome === 0 && totalParity === 0) {
+                return { type: 'no_error', message: 'Hata tespit edilmedi', syndrome: syndrome };
+            } else if (syndrome !== 0 && totalParity === 1) {
+                return { 
+                    type: 'single_error', 
+                    position: syndrome, 
+                    message: `${syndrome}. pozisyonda tek hata`,
+                    syndrome: syndrome
+                };
+            } else if (syndrome !== 0 && totalParity === 0) {
+                return { 
+                    type: 'double_error', 
+                    message: 'Çift hata tespit edildi (düzeltilemiyor)',
+                    syndrome: syndrome
+                };
+            } else {
+                return { 
+                    type: 'parity_error', 
+                    message: 'Genel parite bitinde (PP) hata',
+                    syndrome: syndrome
+                };
+            }
+        }
+        
+        function displayErrorResult(result) {
+            const resultDiv = document.getElementById('errorResult');
+            let html = '';
+            
+            html += `<div><strong>Sendrom:</strong> ${result.syndrome}</div>`;
+            
+            if (result.type === 'no_error') {
+                html += `<div class="success">${result.message}</div>`;
+            } else if (result.type === 'single_error') {
+                html += `<div class="error">${result.message}</div>`;
+                html += `<div>Hata ${result.position}. pozisyondaki biti tersine çevirerek düzeltilebilir</div>`;
+            } else if (result.type === 'double_error') {
+                html += `<div class="error">${result.message}</div>`;
+                html += `<div>Sendrom ${result.syndrome}. pozisyonu gösteriyor, ancak bu yanlış bir değer</div>`;
+            } else {
+                html += `<div class="error">${result.message}</div>`;
+            }
+            
+            resultDiv.innerHTML = html;
+        }
+        
+        function reset() {
+            // Alanları temizle
+            document.getElementById('inputData').value = '';
+            document.getElementById('errorData').value = '';
+            
+            // Adımları gizle
+            document.getElementById('step2').classList.add('hidden');
+            document.getElementById('step3').classList.add('hidden');
+            document.getElementById('step4').classList.add('hidden');
+            
+            // Değişkenleri sıfırla
+            originalBits = '';
+            encodedBits = '';
+        }
+    </script>
+</body>
+</html>
